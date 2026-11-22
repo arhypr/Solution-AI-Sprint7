@@ -1,0 +1,46 @@
+@startuml
+title Rollout и rollback модели
+
+start
+:Новая версия модели\nв Model Registry;
+:Прогон регрессионного набора\n(сегментно-стратифицированный);
+if (Все сегментные гейты пройдены?) then (да)
+  :Shadow mode ≥ 2 недели\n(не влияет на очередь);
+  if (Сегментные метрики\nна живом трафике OK?) then (да)
+    :Canary 5% (стратифицированно\nпо сегментам);
+    if (Guardrails по сегментам OK\n≥ 1 неделя?) then (да)
+      :Canary 25% ≥ 1 неделя;
+      if (Guardrails OK?) then (да)
+        :100% трафика;
+        :Мониторинг продолжается;
+        stop
+      else (нет)
+        :Автоматический rollback\n(feature flag на предыдущую версию);
+        :Постмортем;
+        stop
+      endif
+    else (нет)
+      :Автоматический rollback;
+      :Постмортем;
+      stop
+    endif
+  else (нет)
+    :Не выкатываем;
+    :Доработка модели;
+    stop
+  endif
+else (нет)
+  :Не выкатываем;
+  :Разбор провалившегося сегмента;
+  stop
+endif
+@startuml
+note right of "Автоматический rollback\n(feature flag на предыдущую версию)"
+  Триггеры:
+  - precision@K сегмента −5 п.п.
+  - override rate +20%
+  - rule firing rate 2×
+  - feature coverage < 80%
+  - OOD выше порога
+end note
+@enduml
