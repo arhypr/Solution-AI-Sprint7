@@ -1,0 +1,63 @@
+@startuml
+!include <C4/C4_Container>
+
+title Container diagram — Флагман: приоритизация очереди финмониторинга
+caption Границы доверия помечены как [TBx] на связях; расшифровка — в legend и в 09_trust_boundaries_threats.md
+
+Person(fm, "Сотрудник финмониторинга", "Разбирает операции, принимает решение по процедуре")
+
+System_Ext(core, "АБС / транзакционный журнал", "Операции по счетам, история")
+System_Ext(dict, "Справочники тарифов и лимитов", "Детерминированные пороги")
+System_Ext(kyc, "Внешняя платформа KYC", "Уровень риска клиента — вспомогательный сигнал")
+System_Ext(vkr, "Правила внутреннего контроля", "Регламент ПОД/ФТ")
+
+System_Boundary(bank, "Контур банка (пилот)") {
+    Container(ingest, "Ingestion & Feature Builder", "Kafka/Flink, Python", "CDC из АБС, нормализация, онлайн/офлайн-признаки, эмбеддинги текста назначения платежа")
+    ContainerDb(fs, "Feature Store", "Redis / ClickHouse", "Онлайн- и офлайн-признаки, версии фичей")
+    Container(rules, "Rules Engine", "Python + DSL правил", "Пороговые правила, лимиты, списки, структурные проверки")
+    Container(score, "Scoring Service", "FastAPI + CatBoost/XGBoost", "Риск-скор, калибровка, SHAP-факторы")
+    Container(decision, "Decision & Priority Service", "Python", "Стык правил и модели, guardrails, приоритет, выходной контракт")
+    ContainerDb(queue, "Prioritized Queue", "PostgreSQL + очередь", "Очередь с приоритетом, пояснениями, статусами")
+    ContainerDb(labels, "Label Store", "PostgreSQL", "Разметка: разобранная очередь + контрольная выборка")
+    Container(sampling, "Control Sample Generator", "Python", "Вероятностная стратифицированная выборка операций")
+    Container(train, "Training Pipeline", "Python", "Обучение, валидация, калибровка, оценка на контрольной выборке")
+    Container(registry, "Model Registry", "MLflow", "Версии моделей, артефакты, происхождение весов")
+    Container(monitor, "Monitoring & Audit", "Prometheus / Grafana + audit log", "Качество данных, дрейф, метрики очереди и бизнес-метрики")
+    Container(ui, "Рабочее место ФМ", "Существующий веб-UI процесса", "Показ очереди и пояснений, фиксация решения")
+}
+
+Rel(fm, ui, "Работает с очередью")
+Rel(ui, queue, "Запрашивает верхушку очереди")
+Rel(ui, labels, "Фиксирует решение и причину")
+Rel(core, ingest, "CDC [TB2]")
+Rel(dict, rules, "Тарифы и лимиты [TB2]")
+Rel(kyc, ingest, "Сигнал уровня риска [TB1]")
+Rel(vkr, rules, "Правила регламента")
+Rel(ingest, fs, "Признаки")
+Rel(fs, score, "Онлайн-признаки")
+Rel(fs, rules, "Признаки для правил")
+Rel(score, decision, "Скор, калибровка, факторы")
+Rel(rules, decision, "Срабатывания правил")
+Rel(decision, queue, "Приоритет и контракт")
+Rel(decision, monitor, "Телеметрия решений [TB7]")
+Rel(sampling, core, "Стратифицированная выборка [TB2]")
+Rel(sampling, labels, "Операции на разметку [TB6]")
+Rel(labels, train, "Разметка и слабые метки [TB6]")
+Rel(train, registry, "Обученная модель [TB4]")
+Rel(registry, score, "Артефакт модели [TB4]")
+Rel(queue, monitor, "Глубина, SLA [TB7]")
+Rel(decision, ui, "Выход модели в процесс [TB5]")
+
+legend right
+  **Границы доверия**
+  **[TB1]** внешняя KYC → контур банка
+  **[TB2]** АБС / справочники → контур банка
+  **[TB3]** клиентский текст назначения платежа
+  **[TB4]** артефакты модели и зависимости
+  **[TB5]** выход модели в рабочее место ФМ
+  **[TB6]** разметка → training pipeline
+  **[TB7]** телеметрия и аудит
+  Подробно: 09_trust_boundaries_threats.md
+end legend
+
+@enduml

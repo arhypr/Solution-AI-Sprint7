@@ -1,0 +1,50 @@
+@startuml
+!include <C4/C4_Container>
+
+title Container diagram — №18: извлечение финансовых показателей
+caption Границы доверия: [TB-A] недоверенный документ клиента, [TB-B] LLM, [TB-C] артефакты, [TB-D] выход в карточку, [TB-E] разметка
+
+Person(uw, "Андеррайтер", "Проверяет и правит карточку")
+
+System_Ext(crm, "Кредитный процесс / CRM", "Пакеты заявок, карточка")
+System_Ext(ref, "Справочник форм и показателей", "Эталонные формы")
+
+System_Boundary(bank, "Контур банка") {
+    Container(ingest, "Document Ingestion", "Python", "Приём PDF, сканов, Excel, фото; антивирус; нормализация")
+    Container(ocr, "OCR Service", "Tesseract / коммерческий OCR в контуре", "Распознавание текста, координаты")
+    Container(extract, "Extraction Service", "LayoutLMv3-класс", "Извлечение пар «показатель → значение», тип документа")
+    Container(llm, "LLM Fallback (low-confidence)", "Open-weight LLM в контуре", "Доизвлечение на нетиповых документах")
+    Container(validate, "Field Validator", "Python", "Обязательность, арифметические контроли, сверка со справочником")
+    Container(card, "Card Builder & Contract", "Python", "Сборка карточки, уверенность, ссылки на фрагменты")
+    Container(verify, "Verification UI", "Веб-UI андеррайтера", "Подтверждение / правка значений")
+    ContainerDb(labels, "Label Store", "PostgreSQL", "Исправления андеррайтера как слабая разметка")
+    Container(train, "Training Pipeline", "Python", "Обучение layout-модели")
+    Container(registry, "Model Registry", "MLflow", "Версии модели")
+    Container(monitor, "Monitoring", "Prometheus / Grafana", "Качество извлечения, доля правок")
+}
+
+Rel(crm, ingest, "Пакет документов [TB-A]")
+Rel(ingest, ocr, "Страницы / изображения")
+Rel(ocr, extract, "Текст и координаты")
+Rel(extract, llm, "Low-confidence документы [TB-B]")
+Rel(extract, validate, "Извлечённые поля")
+Rel(llm, validate, "Доизвлечённые поля")
+Rel(ref, validate, "Эталонные формы и показатели")
+Rel(validate, card, "Валидные поля + уверенность")
+Rel(card, verify, "Карточка")
+Rel(verify, crm, "Подтверждённая карточка [TB-D]")
+Rel(verify, labels, "Исправления [TB-E]")
+Rel(labels, train, "Слабая разметка")
+Rel(train, registry, "Модель [TB-C]")
+Rel(registry, extract, "Артефакт модели [TB-C]")
+Rel(card, monitor, "Метрики")
+
+legend right
+  **[TB-A]** документ клиента (недоверенный)
+  **[TB-B]** фрагмент в LLM
+  **[TB-C]** артефакты модели
+  **[TB-D]** выход в карточку / кредитный процесс
+  **[TB-E]** разметка → training
+end legend
+
+@enduml

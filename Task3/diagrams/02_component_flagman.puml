@@ -1,0 +1,42 @@
+@startuml
+!include <C4/C4_Component>
+
+title Component diagram — Decision & Priority Service (флагман)
+caption Показано внутреннее устройство контейнера Decision & Priority; модель — только во внешнем Scoring Service
+
+Container_Ext(fs, "Feature Store", "Онлайн-признаки")
+Container_Ext(rulesExt, "Rules Engine", "Срабатывания правил")
+Container_Ext(scoreExt, "Scoring Service", "Скор и факторы")
+Container_Ext(queue, "Prioritized Queue", "Очередь")
+Container_Ext(audit, "Monitoring & Audit", "Телеметрия и аудит")
+Container_Ext(registry, "Model Registry", "Версия модели")
+
+Container_Boundary(decision, "Decision & Priority Service") {
+    Component(validator, "Request & Data Validator", "Python", "Схема запроса, наличие operation_id, свежесть и полнота признаков")
+    Component(assembler, "Context Assembler", "Python", "Сборка контекста: признаки, срабатывания правил, сигнал KYC")
+    Component(guard, "Guardrail Checker", "Python", "Свежесть, зона воздержания, OOD, расхождение правила/модели")
+    Component(calibrator, "Calibrator & Threshold Policy", "Python", "Калибровка скора, порог, top-K политика")
+    Component(ranker, "Priority Ranker", "Python", "Формирование приоритета из скора и правил")
+    Component(explainer, "Explainer", "Python", "SHAP-факторы и сработавшие правила в человекочитаемом виде")
+    Component(contract, "Response Contract Builder", "Python", "Сборка и валидация выходного контракта")
+    Component(fallback, "Fallback Router", "Python", "Маршрутизация в правила, ручной разбор или отказ от скоринга")
+    Component(logger, "Audit & Telemetry Writer", "Python", "Запись решения, версии модели и причин в аудит")
+}
+
+Rel(validator, assembler, "Валидный запрос")
+Rel(fs, assembler, "Признаки")
+Rel(rulesExt, assembler, "Правила")
+Rel(assembler, guard, "Контекст")
+Rel(registry, calibrator, "Версия модели [TB4]")
+Rel(scoreExt, calibrator, "Скор")
+Rel(calibrator, ranker, "Калиброванный скор")
+Rel(guard, ranker, "Флаги ограничений")
+Rel(ranker, explainer, "Приоритет")
+Rel(explainer, contract, "Пояснения")
+Rel(guard, fallback, "Триггер фолбэка")
+Rel(contract, queue, "Запись в очередь [TB5]")
+Rel(contract, logger, "Аудит [TB7]")
+Rel(fallback, queue, "Упрощённый приоритет / ручной разбор")
+Rel(logger, audit, "Телеметрия [TB7]")
+
+@enduml
