@@ -1,0 +1,46 @@
+@startuml
+!include <C4/C4_Container>
+
+title Container diagram — №5: маршрутизация обращений
+caption Границы доверия: [TB-A] недоверенный текст обращения, [TB-B] LLM, [TB-C] выход в CRM, [TB-D] телеметрия
+
+Person(op, "Оператор клиентского сервиса", "Разбирает low-confidence и перемаршрутизации")
+
+System_Ext(channels, "Каналы обращений", "Чат, почта, веб-форма")
+System_Ext(crm, "CRM / helpdesk", "Тикеты, отделы, история маршрутов")
+
+System_Boundary(bank, "Контур банка") {
+    Container(conn, "Channel Connectors", "Python", "Приём обращений, маскирование ПДн")
+    Container(pre, "Preprocessor", "Python", "Очистка текста, язык, дедупликация")
+    Container(cls, "Classifier (RuBERT)", "Fine-tuned RuBERT", "Вероятности по отделам, top-1/top-3")
+    Container(llm, "LLM Fallback (low-confidence)", "Open-weight LLM в контуре", "Классификация сложных формулировок")
+    Container(rules, "Routing Rules", "Python", "Правила по каналу, типу клиента, ключевым словам, справочник отделов")
+    Container(router, "Router & Contract", "Python", "Стык модели и правил, порог, контракт")
+    Container(lowq, "Manual Sort Queue", "Очередь", "Обращения с низкой уверенностью")
+    Container(monitor, "Monitoring", "Prometheus / Grafana", "macro-F1, доля перемаршрутизаций, время до ответа")
+    ContainerDb(labels, "Label Store", "PostgreSQL", "История маршрутов и правок оператора")
+}
+
+Rel(channels, conn, "Обращения [TB-A]")
+Rel(conn, pre, "Нормализованный текст")
+Rel(pre, cls, "Текст")
+Rel(cls, llm, "Low-confidence [TB-B]")
+Rel(cls, router, "Вероятности")
+Rel(llm, router, "Альтернативная метка")
+Rel(rules, router, "Правила и справочник")
+Rel(router, crm, "Тикет в очереди отдела [TB-C]")
+Rel(router, lowq, "Low-confidence")
+Rel(lowq, op, "Ручная сортировка")
+Rel(op, crm, "Перемаршрутизация [TB-C]")
+Rel(crm, labels, "История")
+Rel(labels, cls, "Дообучение")
+Rel(router, monitor, "Метрики [TB-D]")
+
+legend right
+  **[TB-A]** текст обращения клиента (недоверенный)
+  **[TB-B]** фрагмент в LLM
+  **[TB-C]** выход в CRM
+  **[TB-D]** телеметрия
+end legend
+
+@enduml

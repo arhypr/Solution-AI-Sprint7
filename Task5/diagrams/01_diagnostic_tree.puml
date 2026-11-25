@@ -1,0 +1,56 @@
+@startuml
+title Диагностическое дерево: деградация после выхода в сегмент селлеров
+
+start
+:Разбить все метрики по сегментам\n(E1: seller vs non_seller);
+if (Деградация только в сегменте селлеров?) then (да)
+  :Проверить покрытие признаков\n(E2: null/default/stale);
+  if (Покрытие низкое?) then (да)
+    :H2: feature staleness\n(нет истории у новых клиентов);
+    note right: Проверить также OOD/PSI —\nвозможна комбинация H1+H2
+  else (нет)
+    :Проверить OOD score и PSI\n(E3);
+    if (OOD/PSI высокие?) then (да)
+      :H1: covariate shift\n(сегмент не видели в обучении);
+      note right: Если OOD низкий,\nа качество падает — H4
+    else (нет)
+      :Проверить OOV и embedding distance\nтекста (E4);
+      if (OOV высокий?) then (да)
+        :H3: text drift;
+        note right: Вторичный фактор,\nесли H1/H4 подтверждены
+      else (нет)
+        :Проверить rule firing rate\nи состав top-K (E5);
+        if (Правила флудят очередь?) then (да)
+          :H6: rule interference;
+          note right: Проверить, какая доля\ntop-K — rule-driven
+        else (нет)
+          :Label audit 200 операций\nселлеров (E6);
+          if (Много ложных срабатываний?) then (да)
+            :H4: concept drift\nили H5: label drift;
+            note right: Различить: precision@K\nпо model-driven vs rule-driven
+          else (нет)
+            :H7: возможная адаптация\nмошенников;
+            note right: Нужна доп. проверка\nподтверждённых случаев
+          endif
+        endif
+      endif
+    endif
+  endif
+else (нет, деградация везде)
+  :Проверить data quality\nи pipeline (E7);
+  if (Аномалии в данных?) then (да)
+    :H8: pipeline break;
+  else (нет)
+    :H4: системный concept drift\n(изменение целевой зависимости);
+  endif
+endif
+
+:Сверить с E8: скоры старых клиентов\nне сдвинулись?;
+if (Скоры стабильны?) then (да)
+  :Модель не «сломалась» —\nпроблема в сегменте;
+else (нет)
+  :Системная деградация модели —\nпроверить переобучение\nна загрязнённых данных;
+endif
+
+stop
+@enduml

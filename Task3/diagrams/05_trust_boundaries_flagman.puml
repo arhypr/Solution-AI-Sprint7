@@ -1,0 +1,34 @@
+@startuml
+title Флагман — карта границ доверия (TB)
+caption Все TB показаны пунктиром. Подробности — в 09_trust_boundaries_threats.md
+
+skinparam rectangle {
+  BorderStyle dashed
+  BackgroundColor #FFF7D6
+}
+
+rectangle "Внешняя KYC\n[TB1]" as tb1
+rectangle "АБС / справочники\n[TB2]" as tb2
+rectangle "Клиентский текст\nназначения платежа\n[TB3]" as tb3
+rectangle "Артефакты модели\nи зависимости\n[TB4]" as tb4
+rectangle "Выход модели\nв рабочее место ФМ\n[TB5]" as tb5
+rectangle "Разметка →\ntraining pipeline\n[TB6]" as tb6
+rectangle "Телеметрия\nи аудит\n[TB7]" as tb7
+
+rectangle "Контур банка (пилот)" as bank #white {
+  rectangle "ingestion → feature store → scoring → decision → queue\nsampling → label store → training → registry\nmonitoring & audit" as pipeline
+}
+
+rectangle "Сотрудник ФМ\n(рабочее место)" as fm
+
+tb1 --> bank
+tb2 --> bank
+tb3 --> bank
+tb4 --> bank
+bank --> tb5
+tb5 --> fm
+bank --> tb6
+tb6 --> pipeline
+pipeline --> tb7
+
+@enduml

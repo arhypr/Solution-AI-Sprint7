@@ -1,0 +1,55 @@
+@startuml
+title Сегментно-осведомлённый мониторинг
+
+package "Поток данных" {
+  [Операции из АБС] as ops
+  [Segment Resolver\n(справочник + правило)] as seg
+  [Признаки] as feat
+}
+
+package "Метрики по сегментам" {
+  [precision@K] as prec
+  [override rate] as over
+  [fallback rate] as fb
+  [feature coverage] as cover
+  [OOD / PSI] as ood
+  [text OOV] as oov
+  [rule firing rate] as rule
+  [queue composition\n(rule-driven vs model-driven)] as comp
+}
+
+package "Детекторы и алерты" {
+  [Change-point detection\n(CUSUM / Bayesian)] as cpd
+  [Пороговые алерты] as thr
+  [Тикет в разбор\nсо срезом по сегменту] as ticket
+  [Дашборд] as dash
+}
+
+ops --> seg
+ops --> feat
+seg --> prec
+seg --> over
+seg --> fb
+seg --> cover
+seg --> ood
+seg --> oov
+seg --> rule
+seg --> comp
+feat --> cover
+feat --> ood
+
+prec --> cpd
+over --> cpd
+comp --> cpd
+cover --> thr
+ood --> thr
+oov --> thr
+rule --> thr
+fb --> thr
+
+cpd --> ticket
+thr --> ticket
+cpd --> dash
+thr --> dash
+ticket --> dash
+@enduml
